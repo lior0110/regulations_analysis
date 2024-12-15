@@ -162,3 +162,5 @@ cython_debug/
 #.idea/
 
 .vscode
+regulations/Active_NIS_regulations_with_new_related_controls.feather
+regulations/Active_NIS_regulations_with_new_related_controls.parquet
