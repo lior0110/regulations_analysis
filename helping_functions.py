@@ -15,8 +15,27 @@ from google.api_core import retry
 import os
 import time
 
+"""a collection of the helping functions that are used by the regulation analysis process"""
 
-def print_communities_results(communities, regulations_DataFrame:pd.DataFrame, max_nodes_to_print:int=20, Aggregate_sub_Controls:bool=True, **kwargs):
+
+def print_communities_results(communities, regulations_DataFrame:pd.DataFrame, 
+                              max_nodes_to_print:int=20, Aggregate_sub_Controls:bool=True, **kwargs)->None:
+    """
+    Print the results of community detection in a regulatory framework.
+
+    This function prints the number of communities detected and details about each community,
+    including the number of nodes, family names, and optionally the full list of nodes.
+
+    Parameters:
+    communities (list): A list of communities, where each community is a collection of nodes.
+    regulations_DataFrame (pd.DataFrame): A DataFrame containing regulatory information.
+    max_nodes_to_print (int, optional): Maximum number of nodes to print for each community. Defaults to 20.
+    Aggregate_sub_Controls (bool, optional): If True, aggregates sub-controls under main controls. Defaults to True.
+    **kwargs: Additional keyword arguments. Supports 'k' or 'num_communities' to specify the number of communities.
+
+    Returns:
+    None: This function doesn't return any value, it only prints the results.
+    """
     # print how many communities there are
     if 'k' in kwargs.keys():
         print(f"there are {kwargs['k']} Communities")
@@ -27,7 +46,7 @@ def print_communities_results(communities, regulations_DataFrame:pd.DataFrame, m
             print(f"there are {len(communities)} Communities")
         except Exception as e: 
             print(e)
-    
+
     # print each Community
     for i,Community in enumerate(communities):
         print(f"\nCommunity {i} if of length {len(Community)}\nand contains:")
@@ -41,8 +60,23 @@ def print_communities_results(communities, regulations_DataFrame:pd.DataFrame, m
     return
 
 
-def write_communities_in_regulations(communities, regulations_DataFrame:pd.DataFrame, **kwargs):
 
+def write_communities_in_regulations(communities, regulations_DataFrame:pd.DataFrame, **kwargs)->pd.DataFrame:
+    """
+    Write community assignments to the regulations DataFrame.
+
+    This function assigns community labels to regulations based on the provided community structure.
+
+    Parameters:
+    communities (list): A list of communities, where each community is a collection of nodes.
+    regulations_DataFrame (pd.DataFrame): A DataFrame containing regulatory information.
+    **kwargs: Additional keyword arguments.
+        communities_name (str): The name of the column to store community assignments. Defaults to "new communities".
+        node_column (str): The name of the column in regulations_DataFrame that contains node identifiers. Defaults to "Control Identifier".
+
+    Returns:
+    pd.DataFrame: The updated regulations DataFrame with community assignments added.
+    """
     if "communities_name" not in kwargs.keys():
         communities_name = "new communities"
     else:
@@ -58,7 +92,29 @@ def write_communities_in_regulations(communities, regulations_DataFrame:pd.DataF
 
     return regulations_DataFrame
 
-def print_and_write_communities_results(communities, regulations_DataFrame:pd.DataFrame, max_nodes_to_print:int=20, Aggregate_sub_Controls:bool=True, **kwargs):
+
+def print_and_write_communities_results(communities, regulations_DataFrame:pd.DataFrame, 
+                                        max_nodes_to_print:int=20, Aggregate_sub_Controls:bool=True, **kwargs)->pd.DataFrame:
+    """
+    Print community detection results and write them to the regulations DataFrame.
+
+    This function prints information about detected communities, including their number and composition,
+    and updates the regulations DataFrame with community assignments.
+
+    Parameters:
+    communities (list): A list of communities, where each community is a collection of nodes.
+    regulations_DataFrame (pd.DataFrame): A DataFrame containing regulatory information.
+    max_nodes_to_print (int, optional): Maximum number of nodes to print for each community. Defaults to 20.
+    Aggregate_sub_Controls (bool, optional): If True, aggregates sub-controls under main controls when printing. Defaults to True.
+    **kwargs: Additional keyword arguments.
+        communities_name (str): Name of the column to store community assignments. Defaults to "new communities".
+        node_column (str): Name of the column in regulations_DataFrame that contains node identifiers. Defaults to "Control Identifier".
+        k (int): Number of communities (alternative to num_communities).
+        num_communities (int): Number of communities (alternative to k).
+
+    Returns:
+    pd.DataFrame: The updated regulations DataFrame with community assignments added.
+    """
     
     if "communities_name" not in kwargs.keys():
         communities_name = "new communities"
@@ -95,8 +151,21 @@ def print_and_write_communities_results(communities, regulations_DataFrame:pd.Da
             print(Community)
     return regulations_DataFrame
 
-def add_summation(regulations_DataFrame:pd.DataFrame, relations_DataFrame:pd.DataFrame, is_Main_Controls_Only:bool=True) -> pd.DataFrame:
+def add_summarization(regulations_DataFrame:pd.DataFrame, relations_DataFrame:pd.DataFrame, is_Main_Controls_Only:bool=True) -> pd.DataFrame:
+    """
+    Summarize cyber regulations groups using AI and add the summaries to the relations DataFrame.
 
+    This function processes each group of regulations, generates a summary using an AI model,
+    and adds the summary to the relations DataFrame.
+
+    Parameters:
+    regulations_DataFrame (pd.DataFrame): DataFrame containing detailed regulation information.
+    relations_DataFrame (pd.DataFrame): DataFrame containing the groups of the cyber regulations that where found with other analysis.
+    is_Main_Controls_Only (bool, optional): If True, uses main control names; otherwise, uses control identifiers. Defaults to True.
+
+    Returns:
+    pd.DataFrame: Updated relations_DataFrame with added summaries for each group of regulations.
+    """
     genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
 
     for inx in relations_DataFrame.index:
@@ -113,14 +182,12 @@ def add_summation(regulations_DataFrame:pd.DataFrame, relations_DataFrame:pd.Dat
         # print(regulations_examples)
 
         # summarize the regulations
-        system_instruction:str = "You are an expert in cyber regulations. \
-        Your task is to read all the regulations you are given and summarize them in up to 5 short and concise bullet points. \
-        In your answers give the general topic that represents all of the regulations you were given."
+        system_instruction:str = "You are an expert in cyber regulations. \nYour task is to read all the regulations you are given and summarize them in up to 5 short and concise bullet points. \nIn your answers give the general topic that represents all of the regulations you were given."
         model = genai.GenerativeModel(model_name="gemini-2.0-flash-exp",system_instruction=system_instruction)
         retry_policy = {"retry": retry.Retry(predicate=retry.if_transient_error)}
         response = model.generate_content(f"Please summarize this group of cyber regulations:\n\n{regulations_examples}",
                                           request_options=retry_policy,)
-        
+
         # add the responses to the summary column in the relations_DataFrame
         relations_DataFrame.loc[inx,"Summary"] = response.text.strip()
 
@@ -129,9 +196,40 @@ def add_summation(regulations_DataFrame:pd.DataFrame, relations_DataFrame:pd.Dat
     return relations_DataFrame
 
 
+
 def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:str|list[str],
                          name_column:str = "Main Control Name", family_column:str = "Family Name", is_Main_Controls_Only:bool=True, 
-                         do_print:bool = True):
+                         do_print:bool = True)->tuple[pd.DataFrame,pd.DataFrame,pd.Series,pd.DataFrame]:
+    """
+        Analyze mutual relations between control groups in a regulatory framework and compute various statistics.
+
+        This function processes a DataFrame of regulatory controls, identifies mutual and non-mutual relations
+        between control groups, and calculates various statistics about these relations, including in-family and
+        out-of-family connections.
+
+        Parameters:
+        regulations_DataFrame (pd.DataFrame): DataFrame containing regulatory control data.
+        relations_column (str | list[str]): Column name(s) in the DataFrame that contain relation information.
+        name_column (str): Column name for the control names. Default is "Main Control Name".
+        family_column (str): Column name for the control family names. Default is "Family Name".
+        is_Main_Controls_Only (bool): If True, only consider main controls. Default is True.
+        do_print (bool): If True, print progress information. Default is True.
+
+        Returns:
+        tuple: A tuple containing four elements:
+            - mutually_related (pd.DataFrame): DataFrame of mutually related controls.
+            - not_mutually_related (pd.DataFrame): DataFrame of non-mutually related controls.
+            - in_family_connection_statistics (pd.Series): Series containing various statistics about in-family connections.
+            - relations_statistics (pd.DataFrame): DataFrame containing detailed statistics about relations for each family.
+        """
+    # set default for is_Main_Controls_Only
+    if name_column == "Main Control Name":
+        is_Main_Controls_Only:bool=True
+    elif name_column == "Control Identifier":
+        is_Main_Controls_Only:bool=False
+    else:
+        print(f"unregular control column name: {name_column}")
+    
     # make mutually_related and not_mutually_related DataFrames
     mutually_related = pd.DataFrame(columns=["origen control","related control","same family",])
     m_r = 0
@@ -207,7 +305,11 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
     in_family_connection_statistics = pd.Series()
     families = regulations_DataFrame.groupby(by=[family_column]) # pre-group families 
     in_family_connection_statistics["number of families"] = regulations_DataFrame[family_column].nunique()
-    num_Controls_in_family = families.apply(len,include_groups=False)
+    # if is_Main_Controls_Only:
+    #     num_Controls_in_family = families[name_column].nunique()
+    # else:
+    #     num_Controls_in_family = families.apply(len,include_groups=False)
+    num_Controls_in_family = families[name_column].nunique()
     in_family_connection_statistics["mean number of controls in family"] = num_Controls_in_family.mean()
     in_family_connection_statistics["median number of controls in family"] = num_Controls_in_family.median()
     in_family_connection_statistics["std of number of controls in family"] = num_Controls_in_family.std()
@@ -239,6 +341,7 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
 
     # regulations_DataFrame["Family Name"].nunique()
 
+    # calculate how many inside and outside relations each family have/can have, and statistics on the amount of in-family/out of family connections in relation to the number of total connections
     relations_statistics = pd.DataFrame(index=num_Family_Controls.index,
                                         columns=["number of regulations","names of regulations", 
                                                  "possible inside relations","actual inside relations","percentage inside relations",
@@ -254,7 +357,7 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
 
     # calculate how many inside and outside relations each family can have
 
-
+    # get possible and actual number of relations
     for inx1 in num_Family_Controls.index:
         # get possible
         relations_statistics.loc[inx1,"possible inside relations"] = num_Family_Controls.loc[inx1] * (num_Family_Controls.loc[inx1] - 1)
@@ -317,7 +420,7 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
     # print(f"{p_in:.2%} of possible in-family connections exists")
     # in_family_connection_statistics["percentage of possible in-family connections exists"] = p_in
     
-
+    # out of family connection percentages
     p_out_1 = relations_statistics["actual outside relations"].sum()/relations_statistics["possible outside relations"].sum()
     p_out_2 = relations_statistics["percentage outside relations"].mean()
     in_family_connection_statistics["percentage of possible out of family connections exist 1 (total/total)"] = p_out_1
@@ -342,7 +445,26 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
 def make_network_graph_from_relations(regulations_data:pd.DataFrame, relations_column:str|list[str], 
                                       sub_control_to_control_weight:float=0.1, 
                                       is_directed:bool=False, is_Main_Controls_Only:bool=True, 
-                                      is_Weighted:bool=True, do_Aggregate_sub_Controls:bool=True) -> nx.Graph:
+                                      is_Weighted:bool=True, do_Aggregate_sub_Controls:bool=True) -> nx.Graph|nx.DiGraph:
+    """
+    Create a network graph from NIS800-53 regulatory relations data.
+
+    This function constructs a graph representation of regulatory controls and their relationships
+    based on the provided data. It can create either a directed or undirected graph, with options
+    for weighting edges and focusing on main controls or including sub-controls.
+
+    Parameters:
+    regulations_data (pd.DataFrame): DataFrame containing the regulatory data.
+    relations_column (str | list[str]): Column name(s) in the DataFrame that contain relation information.
+    sub_control_to_control_weight (float): Weight to assign to edges between sub-controls and their main controls. Default is 0.1.
+    is_directed (bool): If True, creates a directed graph. If False, creates an undirected graph. Default is False.
+    is_Main_Controls_Only (bool): If True, only main controls are used as nodes. If False, includes sub-controls. Default is True.
+    is_Weighted (bool): If True, edges are weighted based on relation strength. If False, all edges have equal weight. Default is True.
+    do_Aggregate_sub_Controls (bool): If True, aggregates sub-controls under their main control. Default is True.
+
+    Returns:
+    nx.Graph | nx.DiGraph: A NetworkX graph object representing the regulatory relations network.
+    """
     regulations_data = regulations_data.copy()
     # make a blank graph
     if is_directed:
@@ -426,7 +548,7 @@ def make_network_graph_from_relations(regulations_data:pd.DataFrame, relations_c
                             Related_Controls_Graph.add_edge(Control,Related_Control)
         elif type(relations_column) == list:
             for relations_type in relations_column:
-                
+
                 for Related_Control, value in row[relations_type].items():
                     if is_Main_Controls_Only and Related_Control.find('(') != -1:
                         Related_Control = Related_Control[:Related_Control.find('(')]
@@ -452,7 +574,7 @@ def make_network_graph_from_relations(regulations_data:pd.DataFrame, relations_c
                                     Related_Controls_Graph.add_edge(Control,Related_Control, Relations=1, Weight=(1-value), Weight_Sum=(1-value))
                             else:
                                 Related_Controls_Graph.add_edge(Control,Related_Control)
-                
+
         # break
     print(f"number of nodes in graph: {len(Related_Controls_Graph.nodes)}\nnumber of edges in graph: {len(Related_Controls_Graph.edges)}")
 
@@ -461,13 +583,31 @@ def make_network_graph_from_relations(regulations_data:pd.DataFrame, relations_c
 
 def inspect_connected_components(Related_Controls_Graph:nx.Graph|nx.DiGraph, 
                                  draw_kamada_kawai:bool=False, draw_spring:bool=False)-> tuple[list,list]|list:
+    """
+        Inspect and visualize connected components of a graph.
+
+        This function analyzes the connected components of a given graph, prints information about them,
+        and optionally visualizes the largest components using Kamada-Kawai and/or spring layouts.
+
+        Parameters:
+        Related_Controls_Graph (nx.Graph | nx.DiGraph): The input graph to be analyzed.
+        draw_kamada_kawai (bool): If True, draw the largest component using Kamada-Kawai layout. Default is False.
+        draw_spring (bool): If True, draw the largest component using spring layout. Default is False.
+
+        Returns:
+        tuple[list, list] | list: For directed graphs, returns a tuple containing lists of strongly and weakly
+                                  connected components. For undirected graphs, returns a list of connected components.
+                                  Components are sorted by size in descending order.
+        """
     
     if Related_Controls_Graph.is_directed():
+        # get the graph connected components
         strongly_connected_components = list(nx.strongly_connected_components(Related_Controls_Graph))
         strongly_connected_components = sorted(strongly_connected_components, key=lambda x: len(x), reverse=True)
         weakly_connected_components = list(nx.weakly_connected_components(Related_Controls_Graph))
         weakly_connected_components = sorted(weakly_connected_components, key=lambda x: len(x), reverse=True)
 
+        # print the contents of the strongly connected components
         print(f"number of strongly connected components: {len(strongly_connected_components)}")
 
         for i,connected_component in enumerate(strongly_connected_components):
@@ -475,6 +615,7 @@ def inspect_connected_components(Related_Controls_Graph:nx.Graph|nx.DiGraph,
             if len(connected_component) <= 50:
                 print(connected_component)
 
+        # print the contents of the weakly connected components
         print(f"number of weakly connected components: {len(weakly_connected_components)}")
 
         for i,connected_component in enumerate(weakly_connected_components):
@@ -510,36 +651,58 @@ def inspect_connected_components(Related_Controls_Graph:nx.Graph|nx.DiGraph,
         
         return strongly_connected_components, weakly_connected_components
     else:
+        # get the graph connected components
         connected_components = list(nx.connected_components(Related_Controls_Graph))
         connected_components = sorted(connected_components, key=lambda x: len(x), reverse=True)
         len(connected_components)
 
+        # print the contents of the connected components
         print(f"number of connected components: {len(connected_components)}")
 
         for i,connected_component in enumerate(connected_components):
             print(f"component {i} has {len(connected_component)} nodes")
             if len(connected_component) <= 50:
                 print(connected_component)
-        
+
         # draw the biggest connected component
         # print(f"largest connected component of {len(connected_components[0])} nodes")
         if draw_kamada_kawai:
             Figure = plt.figure(figsize=(20,20))
             plt.title(f"Kamada-Kawai layout for largest connected component of {len(connected_components[0])} nodes")
             nx.draw_kamada_kawai(Related_Controls_Graph.subgraph(connected_components[0]), with_labels=True, font_weight='bold', )
-        
+
         if draw_spring:
             Figure = plt.figure(figsize=(20,20))
             plt.title(f"Spring layout for largest connected component of {len(connected_components[0])} nodes")
             nx.draw_spring(Related_Controls_Graph.subgraph(connected_components[0]), with_labels=True, font_weight='bold', edge_color='purple')
-        
+
         return connected_components
 
 def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_DataFrame:pd.DataFrame, 
-                     relations_column:str|list[str], Add_Weights:bool=True, Only_Main_Controls: bool=True, add_groups_summaries: bool=True,
+                     relations_column:str|list[str], Is_Weighted:bool=True, Only_Main_Controls: bool=True, add_groups_summaries: bool=True,
                      do_Modularity_based_communities: bool=True, do_Louvain_communities: bool=True, do_Fluid_communities: bool=True,
                      do_Divisive_communities: bool=False, do_Label_propagation_communities: bool=False, do_Centrality_communities: bool=False,
                      )-> pd.DataFrame:
+    """
+    Perform cluster analysis on a graph of related controls using various community detection algorithms.
+
+    Parameters:
+    - Related_Controls_Graph (nx.Graph | nx.DiGraph): The graph representing related controls.
+    - regulations_DataFrame (pd.DataFrame): DataFrame containing regulation data.
+    - relations_column (str | list[str]): Column(s) in the DataFrame representing relationships.
+    - Is_Weighted (bool): Whether the graph edges are weighted. Default is True.
+    - Only_Main_Controls (bool): Whether the graph is full controls level or sub-controls level. Default is True(full controls level).
+    - add_groups_summaries (bool): Whether to add group summaries to the results. Default is True.
+    - do_Modularity_based_communities (bool): Whether to perform modularity-based community detection. Default is True.
+    - do_Louvain_communities (bool): Whether to perform Louvain community detection. Default is True.
+    - do_Fluid_communities (bool): Whether to perform fluid community detection. Default is True.
+    - do_Divisive_communities (bool): Whether to perform divisive community detection. Default is False.
+    - do_Label_propagation_communities (bool): Whether to perform label propagation community detection. Default is False.
+    - do_Centrality_communities (bool): Whether to perform centrality-based community detection. Default is False.
+
+    Returns:
+    - pd.DataFrame: A DataFrame containing in-family connection statistics and relations data frames.
+    """
 
     if Only_Main_Controls:
         regulation_name_column:str = "Main Control Name"
@@ -555,7 +718,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
     relations_DataFrames = []
 
     if add_groups_summaries:
-        relations_statistics = add_summation(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
+        relations_statistics = add_summarization(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
 
     relations_DataFrames.append(relations_statistics)
     print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
@@ -566,7 +729,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         print("-"*100)
         print("Modularity-based communities:")
 
-        if Add_Weights:
+        if Is_Weighted:
             Modularity_based_communities = nx.community.greedy_modularity_communities(Related_Controls_Graph, weight='Weight')
         else:
             Modularity_based_communities = nx.community.greedy_modularity_communities(Related_Controls_Graph)
@@ -592,7 +755,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         Modularity_based_communities_relations_statistics = relations_statistics # prepare for output file
         
         if add_groups_summaries:
-            relations_statistics = add_summation(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
+            relations_statistics = add_summarization(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
         
         relations_DataFrames.append(relations_statistics)
         print(in_family_connection_statistics)
@@ -603,8 +766,8 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
     if do_Louvain_communities:
         print("-"*100)
         print("Louvain Community Detection:")
-        
-        if Add_Weights:
+
+        if Is_Weighted:
             Louvain_Communities = nx.community.louvain_communities(Related_Controls_Graph, weight='Weight')
         else:
             Louvain_Communities = nx.community.louvain_communities(Related_Controls_Graph)
@@ -625,10 +788,10 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
 
         Louvain_Communities_relations_statistics = relations_statistics # prepare for output file
-        
+
         if add_groups_summaries:
-            relations_statistics = add_summation(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
-        
+            relations_statistics = add_summarization(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
+
         relations_DataFrames.append(relations_statistics)
         print(in_family_connection_statistics)
         in_family_connection_statistics_test.loc[:,"Louvain Communities"] = in_family_connection_statistics
@@ -665,7 +828,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         Fluid_Communities_relations_statistics = relations_statistics # prepare for output file
         
         if add_groups_summaries:
-            relations_statistics = add_summation(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
+            relations_statistics = add_summarization(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
         
         relations_DataFrames.append(relations_statistics)
         print(in_family_connection_statistics)
@@ -678,14 +841,14 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         
         k = regulations_DataFrame["Family Name"].nunique()
         if nx.is_directed(Related_Controls_Graph):
-            if Add_Weights:
+            if Is_Weighted:
                 Divisive_Communities = nx.community.edge_betweenness_partition(nx.to_undirected(Related_Controls_Graph),k, weight='Weight')
                 # Divisive_Communities = nx.community.edge_current_flow_betweenness_partition(nx.to_undirected(Related_Controls_Graph),k, weight='Weight')
             else:
                 Divisive_Communities = nx.community.edge_betweenness_partition(nx.to_undirected(Related_Controls_Graph),k)
                 # Divisive_Communities = nx.community.edge_current_flow_betweenness_partition(nx.to_undirected(Related_Controls_Graph),k)
         else:
-            if Add_Weights:
+            if Is_Weighted:
                 Divisive_Communities = nx.community.edge_betweenness_partition(Related_Controls_Graph,k, weight='Weight')
                 # Divisive_Communities = nx.community.edge_current_flow_betweenness_partition(Related_Controls_Graph,k, weight='Weight')
             else:
@@ -709,7 +872,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         Divisive_Communities_relations_statistics = relations_statistics # prepare for output file
         
         if add_groups_summaries:
-            relations_statistics = add_summation(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
+            relations_statistics = add_summarization(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
         
         relations_DataFrames.append(relations_statistics)
         print(in_family_connection_statistics)
@@ -720,7 +883,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         print("-"*100)
         print("Label Propagation communities:")
         
-        if Add_Weights:
+        if Is_Weighted:
             Label_propagation = nx.community.asyn_lpa_communities(Related_Controls_Graph, weight='Weight')
             # Label_propagation = nx.community.label_propagation_communities(Related_Controls_Graph)
             # Label_propagation = nx.community.fast_label_propagation_communities(Related_Controls_Graph, weight='Weight')
@@ -745,7 +908,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         Label_propagation_relations_statistics = relations_statistics # prepare for output file
         
         if add_groups_summaries:
-            relations_statistics = add_summation(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
+            relations_statistics = add_summarization(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
         
         relations_DataFrames.append(relations_statistics)
         print(in_family_connection_statistics)
@@ -783,7 +946,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         Centrality_Communities_relations_statistics = relations_statistics # prepare for output file
         
         if add_groups_summaries:
-            relations_statistics = add_summation(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
+            relations_statistics = add_summarization(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
         
         relations_DataFrames.append(relations_statistics)
         print(in_family_connection_statistics)
