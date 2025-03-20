@@ -161,7 +161,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-.vscode
+*.vscode
+*.feather
+*.parquet
 regulations/Active_NIS_regulations_with_new_related_controls.feather
 regulations/Active_NIS_regulations_with_new_related_controls.parquet
 regulations/Active_NIS_regulations_with_new_related_controls2.feather
