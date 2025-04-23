@@ -183,7 +183,8 @@ def add_summarization(regulations_DataFrame:pd.DataFrame, relations_DataFrame:pd
 
         # summarize the regulations
         system_instruction:str = "You are an expert in cyber regulations. \nYour task is to read all the regulations you are given and summarize them in up to 5 short and concise bullet points. \nIn your answers give the general topic that represents all of the regulations you were given."
-        model = genai.GenerativeModel(model_name="gemini-2.0-flash-exp",system_instruction=system_instruction)
+        # model = genai.GenerativeModel(model_name="gemini-2.0-flash",system_instruction=system_instruction)
+        model = genai.GenerativeModel(model_name="gemini-2.0-flash-thinking-exp",system_instruction=system_instruction)
         retry_policy = {"retry": retry.Retry(predicate=retry.if_transient_error)}
         response = model.generate_content(f"Please summarize this group of cyber regulations:\n\n{regulations_examples}",
                                           request_options=retry_policy,)
@@ -191,13 +192,18 @@ def add_summarization(regulations_DataFrame:pd.DataFrame, relations_DataFrame:pd
         # add the responses to the summary column in the relations_DataFrame
         relations_DataFrame.loc[inx,"Summary"] = response.text.strip()
 
+        # print the response
+        # print(f"Response for group {inx}:\n{response}")
+        print(f"Response for group {inx}\ncontaining the regulations {relations_DataFrame.loc[inx,'names of regulations']}:\n\n{response.text.strip()}")
+        print("\n"+"-"*100+"\n")
+
         time.sleep(6) # sleep for a little bit because of RPM limitations
 
     return relations_DataFrame
 
 
 
-def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:str|list[str],
+def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:str|list[str], relations_graph:nx.Graph|nx.DiGraph=None,
                          name_column:str = "Main Control Name", family_column:str = "Family Name", is_Main_Controls_Only:bool=True, 
                          do_print:bool = True)->tuple[pd.DataFrame,pd.DataFrame,pd.Series,pd.DataFrame]:
     """
@@ -210,6 +216,7 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
         Parameters:
         regulations_DataFrame (pd.DataFrame): DataFrame containing regulatory control data.
         relations_column (str | list[str]): Column name(s) in the DataFrame that contain relation information.
+        relations_graph (nx.Graph | nx.DiGraph, optional): A NetworkX graph object representing the relations. Default is None.
         name_column (str): Column name for the control names. Default is "Main Control Name".
         family_column (str): Column name for the control family names. Default is "Family Name".
         is_Main_Controls_Only (bool): If True, only consider main controls. Default is True.
@@ -315,8 +322,8 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
     in_family_connection_statistics["std of number of controls in family"] = num_Controls_in_family.std()
     in_family_connection_statistics["Inter-quartile range of number of controls in family"] = num_Controls_in_family.quantile(0.75) - num_Controls_in_family.quantile(0.25)
     in_family_connection_statistics["number of participating controls"] = regulations_DataFrame.loc[:,[name_column,family_column]].dropna().nunique()[name_column]
-    in_family_connection_statistics["balance score 1 (mean/std)"] = in_family_connection_statistics["mean number of controls in family"] / in_family_connection_statistics["std of number of controls in family"]
-    in_family_connection_statistics["balance score 2 (median/Inter-quartile range)"] = in_family_connection_statistics["median number of controls in family"] / in_family_connection_statistics["Inter-quartile range of number of controls in family"]
+    in_family_connection_statistics["balance score 1 (mean/std)(higher better)"] = in_family_connection_statistics["mean number of controls in family"] / in_family_connection_statistics["std of number of controls in family"]
+    in_family_connection_statistics["balance score 2 (median/Inter-quartile range)(higher better)"] = in_family_connection_statistics["median number of controls in family"] / in_family_connection_statistics["Inter-quartile range of number of controls in family"]
 
     in_family_connection_statistics["same family connections"] = sum(not_mutually_related["same family"]==True) + sum(mutually_related["same family"]==True)
     in_family_connection_statistics["out of family connections"] = sum(not_mutually_related["same family"]==False) + sum(mutually_related["same family"]==False)
@@ -325,7 +332,7 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
     # in_family_connection_ratio_1 = (sum(not_mutually_related["same family"]==True) + sum(mutually_related["same family"]==True)/1) / (sum(not_mutually_related["same family"]==False) + sum(mutually_related["same family"]==False)/1)
     # in_family_connection_statistics["empiric connection ratio 1 (total/total)"] = in_family_connection_ratio_1
     # probability
-    in_family_connection_statistics["empiric connection probability 1 (same family/total)"] = (sum(not_mutually_related["same family"]==True) + sum(mutually_related["same family"]==True)/1) / (len(not_mutually_related) + len(mutually_related))
+    in_family_connection_statistics["empiric connection probability 1 (same family/total)(higher better)"] = (sum(not_mutually_related["same family"]==True) + sum(mutually_related["same family"]==True)/1) / (len(not_mutually_related) + len(mutually_related))
 
     # group families
 
@@ -409,7 +416,7 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
     # # ratio
     # in_family_connection_statistics["empiric connection ratio 2 (mean ratio per family)"] = relations_statistics["ratio inner to outer relations"].mean()
     # probability
-    in_family_connection_statistics["empiric connection probability 2 (mean probability per family)"] = relations_statistics["inner connections probability"].mean()
+    in_family_connection_statistics["empiric connection probability 2 (mean probability per family)(higher better)"] = relations_statistics["inner connections probability"].mean()
 
     p_in_1 = relations_statistics["actual inside relations"].sum()/relations_statistics["possible inside relations"].sum()
     p_in_2 = relations_statistics["percentage inside relations"].mean()
@@ -436,9 +443,140 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
     # in_family_connection_statistics["statistical connection ratio 3 (mean of the ratios per family)"] = (relations_statistics["percentage inside relations"] / relations_statistics["percentage outside relations"]).mean()
     # # in_family_connection_statistics["statistical connection ratio"] = p_in / p_out
     # statistical connection probabilities
-    in_family_connection_statistics["statistical connection probability 1 (Over-representation of total inner connections)"] = (p_in_1 - p_out_1) / (p_in_1 + p_out_1)
-    in_family_connection_statistics["statistical connection probability 2 (Over-representation of mean inner connections)"] = (p_in_2 - p_out_2) / (p_in_2 + p_out_2)
-    in_family_connection_statistics["statistical connection probability 3 (mean of Over-representation of inner connections per family)"] = ((relations_statistics["percentage inside relations"] - relations_statistics["percentage outside relations"]) / (relations_statistics["percentage inside relations"] + relations_statistics["percentage outside relations"])).mean()
+    in_family_connection_statistics["statistical connection probability 1 (Over-representation of total inner connections)(higher better)"] = (p_in_1 - p_out_1) / (p_in_1 + p_out_1)
+    in_family_connection_statistics["statistical connection probability 2 (Over-representation of mean inner connections)(higher better)"] = (p_in_2 - p_out_2) / (p_in_2 + p_out_2)
+    in_family_connection_statistics["statistical connection probability 3 (mean of Over-representation of inner connections per family)(higher better)"] = ((relations_statistics["percentage inside relations"] - relations_statistics["percentage outside relations"]) / (relations_statistics["percentage inside relations"] + relations_statistics["percentage outside relations"])).mean()
+
+    # if a relations_graph was given, add the graph clustering indicators
+    if pd.notna(relations_graph):
+        regulations_DataFrame_F = regulations_DataFrame.copy().where(regulations_DataFrame["Control Identifier"].isin(relations_graph.nodes)).dropna()
+        
+        all_dists = dict(nx.all_pairs_dijkstra_path_length(relations_graph,weight='Weight'))
+        # all_dists_df = pd.DataFrame(all_dists).T
+        all_dists_df = pd.DataFrame.from_dict(all_dists)
+
+        num_members_in_family = regulations_DataFrame_F.groupby(by=[family_column]).apply(len,include_groups=False)
+        num_members_in_family.sum()
+        node_family = regulations_DataFrame_F.set_index("Control Identifier", inplace=False)[family_column]
+        # print(f"node_family = {node_family}")
+
+        mean_node_to_family = pd.DataFrame(index=list(relations_graph.nodes),columns=regulations_DataFrame_F[family_column].unique(),dtype=float)
+        mean_node_to_family
+        mean_family_to_family = pd.DataFrame(index=regulations_DataFrame_F[family_column].unique(),columns=regulations_DataFrame_F[family_column].unique(),dtype=float)
+        mean_family_to_family
+        mean_node_to_all = all_dists_df.mean(axis="columns")
+        mean_node_to_all
+        mean_family_to_all = pd.Series(index=regulations_DataFrame_F[family_column].unique(),dtype=float)
+        mean_family_to_all
+
+        median_node_to_family = pd.DataFrame(index=list(relations_graph.nodes),columns=regulations_DataFrame_F[family_column].unique(),dtype=float)
+        median_node_to_family
+        median_family_to_family = pd.DataFrame(index=regulations_DataFrame_F[family_column].unique(),columns=regulations_DataFrame_F[family_column].unique(),dtype=float)
+        median_family_to_family
+        median_node_to_all = all_dists_df.median(axis="columns")
+        median_node_to_all
+        median_family_to_all = pd.Series(index=regulations_DataFrame_F[family_column].unique(),dtype=float)
+        median_family_to_all
+
+        for family1 in regulations_DataFrame_F[family_column].unique():
+            # print(f"family1 is {family1}")
+            family1_members = regulations_DataFrame_F[name_column].loc[regulations_DataFrame_F[family_column]==family1]
+            num_members_in_family[family1] = len(family1_members)
+            mean_family_to_all[family1] = all_dists_df.loc[:,family1_members].mean(axis=None)
+            median_family_to_all[family1] = all_dists_df.loc[:,family1_members].median(axis=None)
+            mean_node_to_family.loc[:,family1] = all_dists_df.loc[:,family1_members].mean(axis="columns")
+            median_node_to_family.loc[:,family1] = all_dists_df.loc[:,family1_members].median(axis="columns")
+            for family2 in regulations_DataFrame_F[family_column].unique():
+                # print(f"family1 is {family2}")
+                family2_members = regulations_DataFrame_F[name_column].loc[regulations_DataFrame_F[family_column]==family2]
+                mean_family_to_family.loc[family1,family2] = all_dists_df.loc[family2_members,family1_members].mean(axis=None)
+                median_family_to_family.loc[family1,family2] = all_dists_df.loc[family2_members,family1_members].median(axis=None)
+                
+        mean_family_to_all
+        relations_statistics.loc[:,"mean dist from family to all"] = mean_family_to_all
+        relations_statistics.loc[:,"median dist from family to all"] = median_family_to_all
+        mean_node_to_family
+        mean_family_to_family
+        median_family_to_family
+
+        # make final silhouette graph scores
+        silhouette_score_g = pd.DataFrame(index=list(relations_graph.nodes),columns=["same_mean","same_median","closest_mean","closest_median"],dtype=float)
+        for inx in mean_node_to_family.index:
+            # print(f"inx = {inx}")
+            # print(f"node_family[inx] = {node_family[inx]}")
+            # print(f"mean_node_to_family.loc[inx,:] = {mean_node_to_family.loc[inx,:]}")
+            # print(f"mean_node_to_family.loc[inx,node_family[inx]] = {mean_node_to_family.loc[inx,node_family[inx]]}")
+            silhouette_score_g.loc[inx,"same_mean"] = mean_node_to_family.loc[inx,node_family[inx]]
+            silhouette_score_g.loc[inx,"closest_mean"] = mean_node_to_family.loc[inx,:].drop(node_family[inx]).min()
+            silhouette_score_g.loc[inx,"same_median"] = median_node_to_family.loc[inx,node_family[inx]]
+            silhouette_score_g.loc[inx,"closest_median"] = median_node_to_family.loc[inx,:].drop(node_family[inx]).min()
+        
+        silhouette_score_g["silhouette_score_mean"] = (silhouette_score_g["closest_mean"] - silhouette_score_g["same_mean"]) / silhouette_score_g.loc[:,["closest_mean", "same_mean"]].max(axis="columns")
+        silhouette_score_g["silhouette_score_median"] = (silhouette_score_g["closest_median"] - silhouette_score_g["same_median"]) / silhouette_score_g.loc[:,["closest_median", "same_median"]].max(axis="columns")
+        silhouette_score_g
+        # print(f"graph silhouette score is: {silhouette_score_g}")
+        in_family_connection_statistics["graph silhouette score mean(higher better)"] = silhouette_score_g["silhouette_score_mean"].mean()
+        # print(f"graph silhouette score mean is: {silhouette_score_g['silhouette_score_mean'].mean()}")
+        in_family_connection_statistics["graph silhouette score median(higher better)"] = silhouette_score_g["silhouette_score_median"].median()
+        # print(f"graph silhouette score median is: {silhouette_score_g['silhouette_score_median'].median()}")
+
+        # make final calinski harabasz graph score
+        mean_calinski_harabasz_BCSS = mean_family_to_all.copy() * num_members_in_family.copy()
+        median_calinski_harabasz_BCSS = median_family_to_all.copy() * num_members_in_family.copy()
+        mean_calinski_harabasz_WCSS = pd.Series(dtype=float)
+        median_calinski_harabasz_WCSS = pd.Series(dtype=float)
+        for family1 in regulations_DataFrame_F[family_column].unique():
+            mean_calinski_harabasz_WCSS[family1] = mean_family_to_family.loc[family1,family1] * num_members_in_family[family1]
+            median_calinski_harabasz_WCSS[family1] = median_family_to_family.loc[family1,family1] * num_members_in_family[family1]
+        mean_calinski_harabasz_score_g = (mean_calinski_harabasz_BCSS.sum()/(regulations_DataFrame_F[family_column].nunique()-1)) / (mean_calinski_harabasz_WCSS.sum()/(len(relations_graph.nodes)-regulations_DataFrame_F[family_column].nunique()))
+        median_calinski_harabasz_score_g = (median_calinski_harabasz_BCSS.sum()/(regulations_DataFrame_F[family_column].nunique()-1)) / (median_calinski_harabasz_WCSS.sum()/(len(relations_graph.nodes)-regulations_DataFrame_F[family_column].nunique()))
+        mean_calinski_harabasz_score_g
+        in_family_connection_statistics["graph calinski harabasz score mean(higher better)"] = mean_calinski_harabasz_score_g
+        # print(f"graph mean calinski harabasz score is: {mean_calinski_harabasz_score_g}")
+        in_family_connection_statistics["graph calinski harabasz score median(higher better)"] = median_calinski_harabasz_score_g
+        # print(f"graph median calinski harabasz score is: {median_calinski_harabasz_score_g}")
+
+        # make final davies bouldin graph score
+        mean_davies_bouldin_S = pd.Series(dtype=float)
+        median_davies_bouldin_S = pd.Series(dtype=float)
+        for family1 in regulations_DataFrame_F[family_column].unique():
+            mean_davies_bouldin_S[family1] = mean_family_to_family.loc[family1,family1]
+            median_davies_bouldin_S[family1] = median_family_to_family.loc[family1,family1]
+        relations_statistics.loc[:,"mean dist in family"] = mean_davies_bouldin_S
+        relations_statistics.loc[:,"median dist in family"] = median_davies_bouldin_S
+        mean_davies_bouldin_D = mean_family_to_family.copy()
+        median_davies_bouldin_D = median_family_to_family.copy()
+        mean_davies_bouldin_R = pd.DataFrame(dtype=float)
+        median_davies_bouldin_R = pd.DataFrame(dtype=float)
+        for family1 in regulations_DataFrame_F[family_column].unique():
+            for family2 in regulations_DataFrame_F[family_column].unique():
+                if family1 != family2:
+                    mean_davies_bouldin_R.loc[family1,family2] = (mean_davies_bouldin_S[family1] + mean_davies_bouldin_S[family2]) / mean_davies_bouldin_D.loc[family1,family2]
+                    median_davies_bouldin_R.loc[family1,family2] = (median_davies_bouldin_S[family1] + median_davies_bouldin_S[family2]) / median_davies_bouldin_D.loc[family1,family2]
+        mean_davies_bouldin_score_g = mean_davies_bouldin_R.max().mean()
+        mean_davies_bouldin_score_g
+        median_davies_bouldin_score_g = median_davies_bouldin_R.max().median()
+        median_davies_bouldin_score_g
+        in_family_connection_statistics["graph davies bouldin score mean(lower better)"] = mean_davies_bouldin_score_g
+        # print(f"graph mean davies bouldin score is: {mean_davies_bouldin_score_g}")
+        in_family_connection_statistics["graph davies bouldin score median(lower better)"] = median_davies_bouldin_score_g
+        # print(f"graph median davies bouldin score is: {median_davies_bouldin_score_g}")
+
+        # make final dunn graph score
+        MIN_mean = np.inf
+        MIN_median = np.inf
+        for i in mean_davies_bouldin_D.index:
+            for j in mean_davies_bouldin_D.columns:
+                if i != j and mean_davies_bouldin_D.loc[i,j] < MIN_mean:
+                    MIN_mean = mean_davies_bouldin_D.loc[i,j]
+                if i != j and median_davies_bouldin_D.loc[i,j] < MIN_median:
+                    MIN_median = median_davies_bouldin_D.loc[i,j]
+        mean_dunn_score_g = MIN_mean / mean_davies_bouldin_S.max()
+        median_dunn_score_g = MIN_median / median_davies_bouldin_S.max()
+        in_family_connection_statistics["graph dunn score mean(higher better)"] = mean_dunn_score_g
+        # print(f"graph mean dunn score is: {mean_dunn_score_g}")
+        in_family_connection_statistics["graph dunn score median(higher better)"] = median_dunn_score_g
+        # print(f"graph median dunn score is: {median_dunn_score_g}")
 
     return mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics
 
@@ -682,7 +820,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
                      relations_column:str|list[str], Is_Weighted:bool=True, Only_Main_Controls: bool=True, add_groups_summaries: bool=True,
                      do_Modularity_based_communities: bool=True, do_Louvain_communities: bool=True, do_Fluid_communities: bool=True,
                      do_Divisive_communities: bool=False, do_Label_propagation_communities: bool=False, do_Centrality_communities: bool=False,
-                     )-> pd.DataFrame:
+                     )->tuple[pd.DataFrame,list[pd.DataFrame],pd.DataFrame]:
     """
     Perform cluster analysis on a graph of related controls using various community detection algorithms.
 
@@ -700,8 +838,11 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
     - do_Label_propagation_communities (bool): Whether to perform label propagation community detection. Default is False.
     - do_Centrality_communities (bool): Whether to perform centrality-based community detection. Default is False.
 
-    Returns:
-    - pd.DataFrame: A DataFrame containing in-family connection statistics and relations data frames.
+    Returns: in_family_connection_statistics_test, relations_DataFrames, regulations_DataFrame
+    tuple: A tuple containing three elements:
+        - in_family_connection_statistics_test (pd.DataFrame): DataFrame of the statistics indicators compering all of the clustering methods.
+        - relations_DataFrames (list[pd.DataFrame]): A list of DataFrames containing relations statistics for each clustering method.
+        - regulations_DataFrame (pd.DataFrame): An updated regulations DataFrame with the results of the clustering methods.
     """
 
     if Only_Main_Controls:
@@ -711,7 +852,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
     # base clusters
     print("-"*100)
     print("base NIS800-53 families:")
-    mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame,relations_column,name_column=regulation_name_column,is_Main_Controls_Only=Only_Main_Controls,do_print=False)
+    mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame,relations_column,relations_graph=Related_Controls_Graph,name_column=regulation_name_column,is_Main_Controls_Only=Only_Main_Controls,do_print=False)
     relations_statistics.index.name = "original NIS families"
     in_family_connection_statistics_test = pd.DataFrame(index=in_family_connection_statistics.index)
     in_family_connection_statistics_test.loc[:,"NIS800-53 families"] = in_family_connection_statistics
@@ -721,7 +862,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         relations_statistics = add_summarization(regulations_DataFrame, relations_statistics.copy(),is_Main_Controls_Only=Only_Main_Controls)
 
     relations_DataFrames.append(relations_statistics)
-    print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
+    print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)(higher better)']:.3}")
     print(in_family_connection_statistics)
 
     # Modularity-based communities
@@ -736,20 +877,20 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
 
 
         regulations_DataFrame = print_and_write_communities_results(Modularity_based_communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Modularity_based_communities",node_column = regulation_name_column)
-        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = regulation_name_column, family_column = "Modularity_based_communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
+        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = regulation_name_column, family_column = "Modularity_based_communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
         # if Only_Main_Controls:    
         #     regulations_DataFrame = print_and_write_communities_results(Modularity_based_communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Modularity_based_communities",node_column = "Main Control Name")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Main Control Name", family_column = "Modularity_based_communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Main Control Name", family_column = "Modularity_based_communities", do_print = False)
         # else:
         #     regulations_DataFrame = print_and_write_communities_results(Modularity_based_communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Modularity_based_communities",node_column = "Control Identifier")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Control Identifier", family_column = "Modularity_based_communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Control Identifier", family_column = "Modularity_based_communities", do_print = False)
             
         # print_communities_results(Modularity_based_communities,regulations_DataFrame,max_nodes_to_print=30)
 
         # print(f"there are {len(not_mutually_related)} non-mutual connections")
 
-        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)']:.3}")
-        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
+        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)(higher better)']:.3}")
+        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)(higher better)']:.3}")
 
         # not_mutually_related
         Modularity_based_communities_relations_statistics = relations_statistics # prepare for output file
@@ -774,18 +915,18 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
 
 
         regulations_DataFrame = print_and_write_communities_results(Louvain_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Louvain_Communities",node_column = regulation_name_column)
-        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = regulation_name_column, family_column = "Louvain_Communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
+        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = regulation_name_column, family_column = "Louvain_Communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
         # if Only_Main_Controls:    
         #     regulations_DataFrame = print_and_write_communities_results(Louvain_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Louvain_Communities",node_column = "Main Control Name")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Main Control Name", family_column = "Louvain_Communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Main Control Name", family_column = "Louvain_Communities", do_print = False)
         # else:
         #     regulations_DataFrame = print_and_write_communities_results(Louvain_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Louvain_Communities",node_column = "Control Identifier")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Control Identifier", family_column = "Louvain_Communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Control Identifier", family_column = "Louvain_Communities", do_print = False)
 
         # print_communities_results(Louvain_Communities,regulations_DataFrame,max_nodes_to_print=30)
 
-        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)']:.3}")
-        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
+        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)(higher better)']:.3}")
+        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)(higher better)']:.3}")
 
         Louvain_Communities_relations_statistics = relations_statistics # prepare for output file
 
@@ -813,17 +954,17 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
 
         # print_communities_results(Fluid_Communities,regulations_DataFrame,max_nodes_to_print=30,k=k)
         regulations_DataFrame = print_and_write_communities_results(Fluid_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Fluid_Communities",node_column = regulation_name_column)
-        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = regulation_name_column, family_column = "Fluid_Communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
+        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = regulation_name_column, family_column = "Fluid_Communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
         # if Only_Main_Controls:    
         #     regulations_DataFrame = print_and_write_communities_results(Fluid_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,k=k,communities_name="Fluid_Communities",node_column = "Main Control Name")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Main Control Name", family_column = "Fluid_Communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Main Control Name", family_column = "Fluid_Communities", do_print = False)
         # else:
         #     regulations_DataFrame = print_and_write_communities_results(Fluid_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,k=k,communities_name="Fluid_Communities",node_column = "Control Identifier")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Control Identifier", family_column = "Fluid_Communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Control Identifier", family_column = "Fluid_Communities", do_print = False)
 
 
-        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)']:.3}")
-        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
+        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)(higher better)']:.3}")
+        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)(higher better)']:.3}")
 
         Fluid_Communities_relations_statistics = relations_statistics # prepare for output file
         
@@ -857,17 +998,17 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
 
         
         regulations_DataFrame = print_and_write_communities_results(Divisive_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Divisive_Communities",node_column = regulation_name_column)
-        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = regulation_name_column, family_column = "Divisive_Communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
+        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = regulation_name_column, family_column = "Divisive_Communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
         # if Only_Main_Controls:    
         #     regulations_DataFrame = print_and_write_communities_results(Divisive_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,k=k,communities_name="Divisive Communities",node_column = "Main Control Name")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Main Control Name", family_column = "Divisive Communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Main Control Name", family_column = "Divisive Communities", do_print = False)
         # else:
         #     regulations_DataFrame = print_and_write_communities_results(Divisive_Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,k=k,communities_name="Divisive Communities",node_column = "Control Identifier")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Control Identifier", family_column = "Divisive Communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Control Identifier", family_column = "Divisive Communities", do_print = False)
 
 
-        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)']:.3}")
-        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
+        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)(higher better)']:.3}")
+        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)(higher better)']:.3}")
 
         Divisive_Communities_relations_statistics = relations_statistics # prepare for output file
         
@@ -893,17 +1034,17 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
             # Label_propagation = nx.community.fast_label_propagation_communities(Related_Controls_Graph)
 
         regulations_DataFrame = print_and_write_communities_results(Label_propagation,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Label_propagation",node_column = regulation_name_column)
-        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = regulation_name_column, family_column = "Label_propagation",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
+        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = regulation_name_column, family_column = "Label_propagation",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
         # if Only_Main_Controls:    
         #     regulations_DataFrame = print_and_write_communities_results(Label_propagation,regulations_DataFrame.copy(),max_nodes_to_print=30,k=k,communities_name="Label propagation",node_column = "Main Control Name")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Main Control Name", family_column = "Label propagation", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Main Control Name", family_column = "Label propagation", do_print = False)
         # else:
         #     regulations_DataFrame = print_and_write_communities_results(Label_propagation,regulations_DataFrame.copy(),max_nodes_to_print=30,k=k,communities_name="Label propagation",node_column = "Control Identifier")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Control Identifier", family_column = "Label propagation", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Control Identifier", family_column = "Label propagation", do_print = False)
 
 
-        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)']:.3}")
-        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
+        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)(higher better)']:.3}")
+        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)(higher better)']:.3}")
 
         Label_propagation_relations_statistics = relations_statistics # prepare for output file
         
@@ -931,17 +1072,17 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
                 break
         
         regulations_DataFrame = print_and_write_communities_results(Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,communities_name="Centrality_Communities",node_column = regulation_name_column)
-        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = regulation_name_column, family_column = "Centrality_Communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
+        mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = regulation_name_column, family_column = "Centrality_Communities",is_Main_Controls_Only=Only_Main_Controls, do_print = False)
         # if Only_Main_Controls:    
         #     regulations_DataFrame = print_and_write_communities_results(Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,k=k,communities_name="Centrality_Communities",node_column = "Main Control Name")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Main Control Name", family_column = "Centrality Communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Main Control Name", family_column = "Centrality Communities", do_print = False)
         # else:
         #     regulations_DataFrame = print_and_write_communities_results(Communities,regulations_DataFrame.copy(),max_nodes_to_print=30,k=k,communities_name="Centrality Communities",node_column = "Control Identifier")
-        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, name_column = "Control Identifier", family_column = "Centrality Communities", do_print = False)
+        #     mutually_related, not_mutually_related, in_family_connection_statistics, relations_statistics = get_mutual_relations(regulations_DataFrame, relations_column, relations_graph=Related_Controls_Graph, name_column = "Control Identifier", family_column = "Centrality Communities", do_print = False)
 
 
-        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)']:.3}")
-        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)']:.3}")
+        # print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection ratio 1 (total/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection ratio 2 (mean ratio per family)(higher better)']:.3}")
+        print(f"the in_family_connection_ratios are: {in_family_connection_statistics['empiric connection probability 1 (same family/total)(higher better)']:.3} , {in_family_connection_statistics['empiric connection probability 2 (mean probability per family)(higher better)']:.3}")
 
         Centrality_Communities_relations_statistics = relations_statistics # prepare for output file
         
@@ -953,7 +1094,7 @@ def cluster_analysis(Related_Controls_Graph:nx.Graph|nx.DiGraph, regulations_Dat
         in_family_connection_statistics_test.loc[:,"Centrality Communities"] = in_family_connection_statistics
 
 
-    return in_family_connection_statistics_test, relations_DataFrames
+    return in_family_connection_statistics_test, relations_DataFrames, regulations_DataFrame
 
 
 
