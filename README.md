@@ -16,6 +16,12 @@ This repository is a trail of analyzing a regulation framework for families/grou
   * uses the output from [NIS800-53 analysis NLP](https://github.com/lior0110/regulations_analysis/blob/main/NIS800-53%20analysis%20NLP.ipynb) and the functions from [helping_functions](https://github.com/lior0110/regulations_analysis/blob/main/helping_functions.py)
   * makes the second stage of the automated human-independent analysis pipeline for the analysis of the regulations
 
+## Presentations
+
+[Short Presentation](https://docs.google.com/presentation/d/1lkssY2LE_9qsnAbTPCxjyROY9zEah3oH9rK0dg_Kxfo/edit?usp=sharing) - a short form presentation made to show the work done in this project
+
+[Long Presentation](https://docs.google.com/presentation/d/1Kak5krK2rAR6CS-FmMnTM3k_9eCGJE30MAZkxlJEhyA/edit?usp=sharing) - a long form presentation made to show the work done in this project
+
 ## Publications
 
 [*Analysis of the NIS800–53 regulations, Are the NIS families real?*](https://medium.com/@lior0110/analysis-of-the-nis800-53-regulations-are-the-nis-families-real-03148755da3a?source=friends_link&sk=e6b351d9df599508763b44bf6ccea677) - a medium article that covers the first stage of the work from [**NIS800-53 analysis**](https://github.com/lior0110/regulations_analysis/blob/main/NIS800-53%20analysis.ipynb) of evaluating the **NIS800–53 families** based on the **Related Controls** they give themself.

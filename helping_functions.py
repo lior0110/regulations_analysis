@@ -544,15 +544,15 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
             median_davies_bouldin_S[family1] = median_family_to_family.loc[family1,family1]
         relations_statistics.loc[:,"mean dist in family"] = mean_davies_bouldin_S
         relations_statistics.loc[:,"median dist in family"] = median_davies_bouldin_S
-        mean_davies_bouldin_D = mean_family_to_family.copy()
-        median_davies_bouldin_D = median_family_to_family.copy()
+        mean_davies_bouldin_M = mean_family_to_family.copy()
+        median_davies_bouldin_M = median_family_to_family.copy()
         mean_davies_bouldin_R = pd.DataFrame(dtype=float)
         median_davies_bouldin_R = pd.DataFrame(dtype=float)
         for family1 in regulations_DataFrame_F[family_column].unique():
             for family2 in regulations_DataFrame_F[family_column].unique():
                 if family1 != family2:
-                    mean_davies_bouldin_R.loc[family1,family2] = (mean_davies_bouldin_S[family1] + mean_davies_bouldin_S[family2]) / mean_davies_bouldin_D.loc[family1,family2]
-                    median_davies_bouldin_R.loc[family1,family2] = (median_davies_bouldin_S[family1] + median_davies_bouldin_S[family2]) / median_davies_bouldin_D.loc[family1,family2]
+                    mean_davies_bouldin_R.loc[family1,family2] = (mean_davies_bouldin_S[family1] + mean_davies_bouldin_S[family2]) / mean_davies_bouldin_M.loc[family1,family2]
+                    median_davies_bouldin_R.loc[family1,family2] = (median_davies_bouldin_S[family1] + median_davies_bouldin_S[family2]) / median_davies_bouldin_M.loc[family1,family2]
         mean_davies_bouldin_score_g = mean_davies_bouldin_R.max().mean()
         mean_davies_bouldin_score_g
         median_davies_bouldin_score_g = median_davies_bouldin_R.max().median()
@@ -565,12 +565,12 @@ def get_mutual_relations(regulations_DataFrame:pd.DataFrame, relations_column:st
         # make final dunn graph score
         MIN_mean = np.inf
         MIN_median = np.inf
-        for i in mean_davies_bouldin_D.index:
-            for j in mean_davies_bouldin_D.columns:
-                if i != j and mean_davies_bouldin_D.loc[i,j] < MIN_mean:
-                    MIN_mean = mean_davies_bouldin_D.loc[i,j]
-                if i != j and median_davies_bouldin_D.loc[i,j] < MIN_median:
-                    MIN_median = median_davies_bouldin_D.loc[i,j]
+        for i in mean_davies_bouldin_M.index:
+            for j in mean_davies_bouldin_M.columns:
+                if i != j and mean_davies_bouldin_M.loc[i,j] < MIN_mean:
+                    MIN_mean = mean_davies_bouldin_M.loc[i,j]
+                if i != j and median_davies_bouldin_M.loc[i,j] < MIN_median:
+                    MIN_median = median_davies_bouldin_M.loc[i,j]
         mean_dunn_score_g = MIN_mean / mean_davies_bouldin_S.max()
         median_dunn_score_g = MIN_median / median_davies_bouldin_S.max()
         in_family_connection_statistics["graph dunn score mean(higher better)"] = mean_dunn_score_g

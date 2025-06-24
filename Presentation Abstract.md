@@ -21,12 +21,16 @@ I am lior, and this project came from a problem we had related to a product I wo
 
 ### Disclaimer
 
-Due to the project's results, I was asked to say it is not related to the company in the unit I work for!
+Due to the project's results, I was asked to say it is not related to the company or the unit I work for!
 
 ## Back story
 
-In 2023, as part of the product, we made NLP embeddings of the cyber regulations in the product. To the quality of the embeddings, we tried to use them for a grouping task and try to “rediscover” the groups we had in the data, but we ran into trouble because, regardless of what we tried, the groups we got from the embedding were totally different from the ones that are stated in the data. After that, this part was abundant.
+In 2023, as part of the product, we made NLP embeddings of the cyber regulations in the product. To check the quality of the embeddings, we tried to use them for a grouping task and try to “rediscover” the groups we had in the data, but we ran into trouble because, regardless of what we tried, the groups we got from the embedding were totally different from the ones that are stated in the data. After that, this part was abundant.
 But in the middle of 2024, I decided to revisit the project with all of the latest tools and knowledge.
+
+## Problem definition
+
+What is the problem and what we have done.
 
 ## Intro
 
@@ -44,7 +48,11 @@ A good thing about the NIS800-53 regulation is that the data contains a column o
 * For some cases/methods it is easier to obtain closely related entities (which are needed for graph analysis) than to obtain a good n-dimensional representation of the entities (which is needed for normal n-dimensional clustering).
 * Graph-based methods make it easier to combine multiple different inputs into the clustering analysis (making it easier to combine any number of related controls discovery methods we want).
 * Graph space can be a non-metric space, and we see it as an advantage.
-* For our chose example we have the exsect data needed for it 🙂.
+* For our chosen example we have the exsect data needed for it 🙂.
+
+## What are the criteria for good groupings?
+
+what are the metrics that help us decide how good the groups are?
 
 ## Graph analysis of the “golden standard”
 

@@ -164,6 +164,7 @@ cython_debug/
 *.vscode
 *.feather
 *.parquet
+*.pptx
 regulations/Active_NIS_regulations_with_new_related_controls.feather
 regulations/Active_NIS_regulations_with_new_related_controls.parquet
 regulations/Active_NIS_regulations_with_new_related_controls2.feather
